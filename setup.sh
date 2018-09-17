@@ -51,20 +51,6 @@ read -p "Email address for sysadmin (e.g. j.bloggs@example.com): " EMAILADDR
 
 echo
 
-read -p "SSH log-in port (default: 22): " SSHPORT
-SSHPORT=${SSHPORT:-22}
-
-read -p "SSH log-in username: " LOGINUSERNAME
-while true; do
-  read -s -p "SSH log-in password (must be REALLY STRONG): " LOGINPASSWORD
-  echo
-  read -s -p "Confirm SSH log-in password: " LOGINPASSWORD2
-  echo
-  [ "$LOGINPASSWORD" = "$LOGINPASSWORD2" ] && break
-  echo "Passwords didn't match -- please try again"
-done
-
-
 VPNIPPOOL="10.10.10.0/24"
 
 
@@ -237,7 +223,7 @@ conn roadwarrior
   rightid=%any
   rightauth=eap-mschapv2
   eap_identity=%any
-  rightdns=8.8.8.8,8.8.4.4
+  rightdns=1.1.1.1
   rightsourceip=${VPNIPPOOL}
   rightsendcert=never
 " > /etc/ipsec.conf
