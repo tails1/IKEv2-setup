@@ -98,38 +98,6 @@ echo
 echo "--- Configuring firewall ---"
 echo
 
-# firewall
-# https://www.strongswan.org/docs/LinuxKongress2009-strongswan.pdf
-# https://wiki.strongswan.org/projects/strongswan/wiki/ForwardingAndSplitTunneling
-# https://www.zeitgeist.se/2013/11/26/mtu-woes-in-ipsec-tunnels-how-to-fix/
-
-iptables -P INPUT   ACCEPT
-iptables -P FORWARD ACCEPT
-iptables -P OUTPUT  ACCEPT
-
-iptables -F
-iptables -t nat -F
-iptables -t mangle -F
-
-# INPUT
-
-# accept anything already accepted
-iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-
-# accept anything on the loopback interface
-iptables -A INPUT -i lo -j ACCEPT
-
-# drop invalid packets
-iptables -A INPUT -m state --state INVALID -j DROP
-
-# rate-limit repeated new requests from same IP to any ports
-iptables -I INPUT -i $ETH0ORSIMILAR -m state --state NEW -m recent --set
-iptables -I INPUT -i $ETH0ORSIMILAR -m state --state NEW -m recent --update --seconds 60 --hitcount 12 -j DROP
-
-# accept (non-standard) SSH
-iptables -A INPUT -p tcp --dport $SSHPORT -j ACCEPT
-
-
 # VPN
 
 # accept IPSec/NAT-T for VPN (ESP not needed with forceencaps, as ESP goes inside UDP)
