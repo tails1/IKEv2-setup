@@ -51,6 +51,20 @@ read -p "Email address for sysadmin (e.g. j.bloggs@example.com): " EMAILADDR
 
 echo
 
+read -p "SSH log-in port (default: 22): " SSHPORT
+SSHPORT=${SSHPORT:-22}
+
+read -p "SSH log-in username: " LOGINUSERNAME
+while true; do
+  read -s -p "SSH log-in password (must be REALLY STRONG): " LOGINPASSWORD
+  echo
+  read -s -p "Confirm SSH log-in password: " LOGINPASSWORD2
+  echo
+  [ "$LOGINPASSWORD" = "$LOGINPASSWORD2" ] && break
+  echo "Passwords didn't match -- please try again"
+done
+
+
 VPNIPPOOL="10.10.10.0/24"
 
 
@@ -111,6 +125,10 @@ iptables -A INPUT -m state --state INVALID -j DROP
 # rate-limit repeated new requests from same IP to any ports
 iptables -I INPUT -i $ETH0ORSIMILAR -m state --state NEW -m recent --set
 iptables -I INPUT -i $ETH0ORSIMILAR -m state --state NEW -m recent --update --seconds 60 --hitcount 12 -j DROP
+
+# accept (non-standard) SSH
+iptables -A INPUT -p tcp --dport $SSHPORT -j ACCEPT
+
 
 # VPN
 
@@ -178,14 +196,26 @@ echo
 
 grep -Fq 'jawj/IKEv2-setup' /etc/sysctl.conf || echo '
 # https://github.com/jawj/IKEv2-setup
+kernel.msgmnb = 65536
+kernel.msgmax = 65536
+
 net.ipv4.ip_forward = 1
 net.ipv4.ip_no_pmtu_disc = 1
-net.ipv4.conf.all.rp_filter = 1
+net.ipv4.conf.all.accept_source_route = 0
 net.ipv4.conf.all.accept_redirects = 0
 net.ipv4.conf.all.send_redirects = 0
+net.ipv4.conf.all.rp_filter = 0
+net.ipv4.conf.default.accept_source_route = 0
+net.ipv4.conf.default.accept_redirects = 0
+net.ipv4.conf.default.send_redirects = 0
+net.ipv4.conf.default.rp_filter = 0
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
+net.core.wmem_max = 12582912
+net.core.rmem_max = 12582912
+net.ipv4.tcp_rmem = 10240 87380 12582912
+net.ipv4.tcp_wmem = 10240 87380 12582912
 ' >> /etc/sysctl.conf
 
 sysctl -p
@@ -208,7 +238,7 @@ conn roadwarrior
   ike=aes256gcm16-sha256-ecp521,aes256-sha256-ecp384!
   esp=aes256gcm16-sha256,aes256gcm16-ecp384!
   dpdaction=clear
-  dpddelay=180s
+  dpddelay=1800s
   rekey=no
   left=%any
   leftid=@${VPNHOST}
@@ -229,6 +259,34 @@ ${VPNUSERNAME} : EAP \""${VPNPASSWORD}"\"
 " > /etc/ipsec.secrets
 
 ipsec restart
+
+
+
+echo
+echo "--- User ---"
+echo
+
+# user + SSH
+
+id -u $LOGINUSERNAME &>/dev/null || adduser --disabled-password --gecos "" $LOGINUSERNAME
+echo "${LOGINUSERNAME}:${LOGINPASSWORD}" | chpasswd
+adduser ${LOGINUSERNAME} sudo
+
+sed -r \
+-e "s/^#?Port 22$/Port ${SSHPORT}/" \
+-e 's/^#?LoginGraceTime (120|2m)$/LoginGraceTime 30/' \
+-e 's/^#?PermitRootLogin yes$/PermitRootLogin no/' \
+-e 's/^#?X11Forwarding yes$/X11Forwarding no/' \
+-e 's/^#?UsePAM yes$/UsePAM no/' \
+-i.original /etc/ssh/sshd_config
+
+grep -Fq 'jawj/IKEv2-setup' /etc/ssh/sshd_config || echo "
+# https://github.com/jawj/IKEv2-setup
+MaxStartups 1
+MaxAuthTries 2
+UseDNS no" >> /etc/ssh/sshd_config
+
+service ssh restart
 
 
 echo
