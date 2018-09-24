@@ -95,40 +95,6 @@ if [[ "$IP" != "$VPNHOSTIP" ]]; then
 fi
 
 echo
-echo "--- Configuring firewall ---"
-echo
-
-# VPN
-
-# accept IPSec/NAT-T for VPN (ESP not needed with forceencaps, as ESP goes inside UDP)
-iptables -A INPUT -p udp --dport  500 -j ACCEPT
-iptables -A INPUT -p udp --dport 4500 -j ACCEPT
-
-# forward VPN traffic anywhere
-iptables -A FORWARD --match policy --pol ipsec --dir in  --proto esp -s $VPNIPPOOL -j ACCEPT
-iptables -A FORWARD --match policy --pol ipsec --dir out --proto esp -d $VPNIPPOOL -j ACCEPT
-
-# reduce MTU/MSS values for dumb VPN clients
-iptables -t mangle -A FORWARD --match policy --pol ipsec --dir in -s $VPNIPPOOL -o $ETH0ORSIMILAR -p tcp -m tcp --tcp-flags SYN,RST SYN -m tcpmss --mss 1361:1536 -j TCPMSS --set-mss 1360
-
-# masquerade VPN traffic over eth0 etc.
-iptables -t nat -A POSTROUTING -s $VPNIPPOOL -o $ETH0ORSIMILAR -m policy --pol ipsec --dir out -j ACCEPT  # exempt IPsec traffic from masquerading
-iptables -t nat -A POSTROUTING -s $VPNIPPOOL -o $ETH0ORSIMILAR -j MASQUERADE
-
-
-# fall through to drop any other input and forward traffic
-
-iptables -A INPUT   -j DROP
-iptables -A FORWARD -j DROP
-
-iptables -L
-
-debconf-set-selections <<< "iptables-persistent iptables-persistent/autosave_v4 boolean true"
-debconf-set-selections <<< "iptables-persistent iptables-persistent/autosave_v6 boolean true"
-dpkg-reconfigure iptables-persistent
-
-
-echo
 echo "--- Configuring RSA certificates ---"
 echo
 
